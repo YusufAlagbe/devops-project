@@ -164,3 +164,97 @@ SCRIPT
         '''
       }
     }
+    // ── 8. Store Terraform on Server ──────────────────────
+    stage('8. Store Terraform on Server') {
+      steps {
+        sh '''
+          SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no"
+          ssh $SSH_OPTS ubuntu@${SERVER_IP} \
+            "sudo mkdir -p /opt/terraform/project && sudo chown ubuntu:ubuntu /opt/terraform/project"
+          rsync -az --delete -e "ssh $SSH_OPTS" \
+            ${WORKSPACE}/terraform/ ubuntu@${SERVER_IP}:/opt/terraform/project/
+          echo "Terraform files stored at /opt/terraform/project on the server"
+        '''
+      }
+    }
+    // ── 9. Health Checks ──────────────────────────────────
+    stage('9. Health Checks') {
+      steps {
+        sh '''
+          sleep 15
+          for APP in node python java go php; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://${SERVER_IP}/${APP}/ 2>/dev/null || echo "000")
+            echo "${APP}-app: HTTP ${STATUS}"
+          done
+        '''
+      }
+    }
+  }
+  post {
+    always {
+      script {
+        echo """
+==============================================
+  DEPLOYMENT COMPLETE
+  Server : ${SERVER_IP}
+  PHP    : http://${SERVER_IP}/
+  Node   : http://${SERVER_IP}/node/
+  Python : http://${SERVER_IP}/python/
+  Java   : http://${SERVER_IP}/java/
+  Go     : http://${SERVER_IP}/go/
+  Jenkins: http://${SERVER_IP}:8080
+==============================================
+        """
+      }
+      sh 'docker image prune -f || true'
+      echo 'Pipeline failed. Check stage logs above.'
+    }
+  }
+}
+    // ── 8. Store Terraform on Server ──────────────────────
+    stage('8. Store Terraform on Server') {
+      steps {
+        sh '''
+          SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no"
+          ssh $SSH_OPTS ubuntu@${SERVER_IP} \
+            "sudo mkdir -p /opt/terraform/project && sudo chown ubuntu:ubuntu /opt/terraform/project"
+          rsync -az --delete -e "ssh $SSH_OPTS" \
+            ${WORKSPACE}/terraform/ ubuntu@${SERVER_IP}:/opt/terraform/project/
+          echo "Terraform files stored at /opt/terraform/project on the server"
+        '''
+      }
+    }
+    // ── 9. Health Checks ──────────────────────────────────
+    stage('9. Health Checks') {
+      steps {
+        sh '''
+          sleep 15
+          for APP in node python java go php; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://${SERVER_IP}/${APP}/ 2>/dev/null || echo "000")
+            echo "${APP}-app: HTTP ${STATUS}"
+          done
+        '''
+      }
+    }
+  }
+  post {
+    always {
+      script {
+        echo """
+==============================================
+  DEPLOYMENT COMPLETE
+  Server : ${SERVER_IP}
+  PHP    : http://${SERVER_IP}/
+  Node   : http://${SERVER_IP}/node/
+  Python : http://${SERVER_IP}/python/
+  Java   : http://${SERVER_IP}/java/
+  Go     : http://${SERVER_IP}/go/
+  Jenkins: http://${SERVER_IP}:8080
+==============================================
+        """
+      }
+      sh 'docker image prune -f || true'
+      echo 'Pipeline failed. Check stage logs above.'
+    }
+  }
+}
