@@ -109,20 +109,9 @@ pipeline {
     }
     stage('5b. SKIP') {
       steps {
-        dir('terraform') {
-          sh '''
-            terraform init  -input=false
-            terraform validate
-            terraform plan  -input=false -out=tfplan -var-file=terraform.tfvars
-            terraform apply -input=false -auto-approve tfplan
-          '''
-          script {
-            env.SERVER_IP = sh(
-              script: 'terraform output -raw server_public_ip',
-              returnStdout: true
-            ).trim()
-            echo "Server IP: ${env.SERVER_IP}"
-          }
+        script {
+          env.SERVER_IP = '54.196.219.15'
+          echo "Using existing EC2: ${env.SERVER_IP}"
         }
       }
     }
