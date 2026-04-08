@@ -137,13 +137,11 @@ pipeline {
     stage('7. Deploy Containers') {
       steps {
         sh '''
-          SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@${SERVER_IP}"
-
           # Copy nginx config
           scp -i $SSH_KEY -o StrictHostKeyChecking=no \
             nginx/nginx-proxy.conf ubuntu@${SERVER_IP}:/tmp/nginx-proxy.conf
 
-          $SSH bash <<REMOTE
+          ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@${SERVER_IP} bash <<REMOTE
             set -e
             sudo mv /tmp/nginx-proxy.conf /opt/nginx-proxy.conf
 
