@@ -1,0 +1,67 @@
+networks:
+  app-network:
+    driver: bridge
+
+services:
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx-proxy.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - node-app
+      - python-app
+      - java-app
+      - go-app
+      - php-app
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  node-app:
+    build: ./apps/node-app
+    container_name: node-app
+    expose:
+      - "3000"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  python-app:
+    build: ./apps/python-app
+    container_name: python-app
+    expose:
+      - "5000"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  java-app:
+    build:
+      context: ./apps/java-app/javalin-auth-example
+    container_name: java-app
+    expose:
+      - "7070"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  go-app:
+    build: ./apps/go-app
+    container_name: go-app
+    expose:
+      - "8082"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  php-app:
+    build: ./apps/php-app
+    container_name: php-app
+    expose:
+      - "80"
+    networks:
+      - app-network
+    restart: unless-stopped

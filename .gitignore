@@ -1,0 +1,19 @@
+# Sensitive files - NEVER commit these
+*.pem
+terraform.tfvars
+terraform.tfstate
+terraform.tfstate.backup
+
+# Terraform internals
+.terraform/
+*.lock.hcl
+
+# App repos - Jenkins will clone these separately
+apps/
+
+# Docker temp files
+*.tar.gz
+
+# OS files
+.DS_Store
+Thumbs.db
