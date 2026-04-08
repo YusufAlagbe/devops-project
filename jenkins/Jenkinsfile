@@ -104,6 +104,10 @@ pipeline {
 
     // ── 5. Terraform: Provision EC2 ───────────────────────
     stage('5. Terraform Provision') {
+      when { expression { return false } }
+      steps { echo 'Skipped - using existing EC2' }
+    }
+    stage('5b. SKIP') {
       steps {
         dir('terraform') {
           sh '''
