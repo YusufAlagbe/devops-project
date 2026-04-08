@@ -118,7 +118,7 @@ pipeline {
             dir('php-app') {
               sh '''
                 composer install --no-dev -q 2>/dev/null || echo "No composer"
-                find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; 2>/dev/null | \
+                find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \\; 2>/dev/null | \
                   grep -v "No syntax" || true
               '''
             }
