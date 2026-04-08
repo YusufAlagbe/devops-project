@@ -1,111 +1,71 @@
-// ============================================================
-// Jenkinsfile — Full CI/CD with Docker
-// Stages:
-//   1.  Checkout all 5 repos
-//   2.  Build & Test each app
-//   3.  Build Docker images
-//   4.  Push images to Docker Hub
-//   5.  Terraform Provision EC2
-//   6.  Wait for server
-//   7.  Pull & run containers on EC2
-//   8.  Store Terraform on server
-//   9.  Health checks
-// ============================================================
-
 pipeline {
-
   agent any
-
   environment {
-    AWS_ACCESS_KEY_ID     = credentials('aws-access-key-id')
+    DOCKER_HUB_USER    = 'yoalagbe1'
+    SSH_KEY            = credentials('ec2-ssh-private-key')
+    DOCKER_HUB_CREDS   = credentials('dockerhub-credentials')
+    AWS_ACCESS_KEY_ID  = credentials('aws-access-key-id')
     AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
-    AWS_DEFAULT_REGION    = 'us-east-1'
-    DOCKER_HUB_CREDS      = credentials('dockerhub-credentials')
-    DOCKER_HUB_USER       = 'yoalagbe1'
-    SSH_KEY               = credentials('ec2-ssh-private-key')
-
-    JAVA_REPO   = 'https://github.com/YusufAlagbe/java-app.git'
-    PHP_REPO    = 'https://github.com/YusufAlagbe/php-app.git'
-    GO_REPO     = 'https://github.com/YusufAlagbe/go-app.git'
-    NODE_REPO   = 'https://github.com/YusufAlagbe/node-app.git'
-    PYTHON_REPO = 'https://github.com/YusufAlagbe/python-app.git'
-
-    IMAGE_TAG   = "${BUILD_NUMBER}"
+    SERVER_IP          = ''
   }
-
   options {
-    timeout(time: 90, unit: 'MINUTES')
-    buildDiscarder(logRotator(numToKeepStr: '10'))
-    disableConcurrentBuilds()
+    timeout(time: 1, unit: 'HOURS')
     timestamps()
   }
-
   stages {
-
-    // ── 1. Clone all repos ─────────────────────────────────
     stage('1. Clone Repositories') {
       steps {
         script {
-          def repos = [
-            [dir: 'node-app',   url: env.NODE_REPO],
-            [dir: 'python-app', url: env.PYTHON_REPO],
-            [dir: 'java-app',   url: env.JAVA_REPO],
-            [dir: 'go-app',     url: env.GO_REPO],
-            [dir: 'php-app',    url: env.PHP_REPO],
-          ]
-          repos.each { r ->
-            dir(r.dir) { git url: r.url, branch: 'main' }
+          def apps = ['node-app','python-app','java-app','go-app','php-app']
+          apps.each { app ->
+            dir(app) {
+              git url: "https://github.com/YusufAlagbe/${app}.git", branch: 'main'
+            }
           }
         }
       }
     }
-
-    // ── 2. Build & Test (parallel) ────────────────────────
     stage('2. Build & Test') {
-      when { expression { return false } }
-      steps { echo 'Tests skipped - apps verified locally' }
+      when { expression { false } }
+      steps { echo 'Skipped' }
     }
-
-    // ── 3. Build Docker Images (parallel) ─────────────────
     stage('3. Build Docker Images') {
-      parallel {
-        stage('Build node-app')   {
-          steps { dir('node-app')   { sh "docker build -t $DOCKER_HUB_USER/node-app:$IMAGE_TAG -t $DOCKER_HUB_USER/node-app:latest ." } }
-        }
-        stage('Build python-app') {
-          steps { dir('python-app') { sh "docker build -t $DOCKER_HUB_USER/python-app:$IMAGE_TAG -t $DOCKER_HUB_USER/python-app:latest ." } }
-        }
-        stage('Build java-app')   {
-          steps { dir('java-app')   { sh "docker build -t $DOCKER_HUB_USER/java-app:$IMAGE_TAG -t $DOCKER_HUB_USER/java-app:latest ." } }
-        }
-        stage('Build go-app')     {
-          steps { dir('go-app')     { sh "docker build -t $DOCKER_HUB_USER/go-app:$IMAGE_TAG -t $DOCKER_HUB_USER/go-app:latest ." } }
-        }
-        stage('Build php-app')    {
-          steps { dir('php-app')    { sh "docker build -t $DOCKER_HUB_USER/php-app:$IMAGE_TAG -t $DOCKER_HUB_USER/php-app:latest ." } }
-        }
+      steps {
+        parallel(
+          'Build node-app':   { dir('node-app')   { sh "docker build -t yoalagbe1/node-app:${BUILD_NUMBER} -t yoalagbe1/node-app:latest ." } },
+          'Build python-app': { dir('python-app') { sh "docker build -t yoalagbe1/python-app:${BUILD_NUMBER} -t yoalagbe1/python-app:latest ." } },
+          'Build java-app':   { dir('java-app')   { sh "docker build -t yoalagbe1/java-app:${BUILD_NUMBER} -t yoalagbe1/java-app:latest ." } },
+          'Build go-app':     { dir('go-app')     { sh "docker build -t yoalagbe1/go-app:${BUILD_NUMBER} -t yoalagbe1/go-app:latest ." } },
+          'Build php-app':    { dir('php-app')    { sh "docker build -t yoalagbe1/php-app:${BUILD_NUMBER} -t yoalagbe1/php-app:latest ." } }
+        )
       }
     }
-
-    // ── 4. Push to Docker Hub ─────────────────────────────
     stage('4. Push to Docker Hub') {
       steps {
         sh '''
-          echo "$DOCKER_HUB_CREDS_PSW" | docker login -u "$DOCKER_HUB_CREDS_USR" --password-stdin
-          for APP in node-app python-app java-app go-app php-app; do
-            docker push $DOCKER_HUB_USER/$APP:$IMAGE_TAG
-            docker push $DOCKER_HUB_USER/$APP:latest
-            echo "Pushed $APP"
-          done
+          echo $DOCKER_HUB_CREDS_PSW | docker login -u yoalagbe1 --password-stdin
+          docker push yoalagbe1/node-app:''' + env.BUILD_NUMBER + '''
+          docker push yoalagbe1/node-app:latest
+          echo "Pushed node-app"
+          docker push yoalagbe1/python-app:''' + env.BUILD_NUMBER + '''
+          docker push yoalagbe1/python-app:latest
+          echo "Pushed python-app"
+          docker push yoalagbe1/java-app:''' + env.BUILD_NUMBER + '''
+          docker push yoalagbe1/java-app:latest
+          echo "Pushed java-app"
+          docker push yoalagbe1/go-app:''' + env.BUILD_NUMBER + '''
+          docker push yoalagbe1/go-app:latest
+          echo "Pushed go-app"
+          docker push yoalagbe1/php-app:''' + env.BUILD_NUMBER + '''
+          docker push yoalagbe1/php-app:latest
+          echo "Pushed php-app"
           docker logout
         '''
       }
     }
-
-    // ── 5. Terraform: Provision EC2 ───────────────────────
     stage('5. Terraform Provision') {
-      when { expression { return false } }
-      steps { echo 'Skipped - using existing EC2' }
+      when { expression { false } }
+      steps { echo 'Skipped' }
     }
     stage('5b. SKIP') {
       steps {
@@ -115,29 +75,22 @@ pipeline {
         }
       }
     }
-
-    // ── 6. Wait for EC2 ───────────────────────────────────
     stage('6. Wait for Server') {
       steps {
         sh '''
           for i in $(seq 1 30); do
-            if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-               ubuntu@${SERVER_IP} "echo ready" 2>/dev/null; then
+            if ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@54.196.219.15 echo ready; then
               echo "SSH ready!"
               break
             fi
-            echo "Attempt $i — waiting 20s..."
-            sleep 20
+            sleep 10
           done
         '''
       }
     }
-
-    // ── 7. Deploy Containers on EC2 ───────────────────────
     stage('7. Deploy Containers') {
       steps {
         sh '''
-          # Write deploy script
           cat > /tmp/deploy.sh << 'SCRIPT'
 set -e
 sudo mv /tmp/nginx-proxy.conf /opt/nginx-proxy.conf
@@ -155,37 +108,30 @@ docker run -d --name java-app --network app-network --restart unless-stopped yoa
 docker run -d --name go-app --network app-network --restart unless-stopped yoalagbe1/go-app:latest
 docker run -d --name php-app --network app-network --restart unless-stopped yoalagbe1/php-app:latest
 docker run -d --name nginx-proxy --network app-network -p 80:80 -v /opt/nginx-proxy.conf:/etc/nginx/nginx.conf:ro --restart unless-stopped nginx:alpine
-docker ps --format "table {{.Names}}	{{.Status}}"
+docker ps --format "table {{.Names}}\t{{.Status}}"
 SCRIPT
-          # Copy nginx config and run deploy script
-          scp -i $SSH_KEY -o StrictHostKeyChecking=no \
-            nginx/nginx-proxy.conf ubuntu@${SERVER_IP}:/tmp/nginx-proxy.conf
-          ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@${SERVER_IP} bash < /tmp/deploy.sh
+          scp -i $SSH_KEY -o StrictHostKeyChecking=no nginx/nginx-proxy.conf ubuntu@54.196.219.15:/tmp/nginx-proxy.conf
+          ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@54.196.219.15 bash < /tmp/deploy.sh
         '''
       }
     }
-    // ── 8. Store Terraform on Server ──────────────────────
     stage('8. Store Terraform on Server') {
       steps {
         sh '''
-          SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no"
-          ssh $SSH_OPTS ubuntu@${SERVER_IP} \
-            "sudo mkdir -p /opt/terraform/project && sudo chown ubuntu:ubuntu /opt/terraform/project"
-          rsync -az --delete -e "ssh $SSH_OPTS" \
-            ${WORKSPACE}/terraform/ ubuntu@${SERVER_IP}:/opt/terraform/project/
-          echo "Terraform files stored at /opt/terraform/project on the server"
+          ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@54.196.219.15 "sudo mkdir -p /opt/terraform/project && sudo chown ubuntu:ubuntu /opt/terraform/project"
+          rsync -az --delete -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" ${WORKSPACE}/terraform/ ubuntu@54.196.219.15:/opt/terraform/project/
         '''
       }
     }
-    // ── 9. Health Checks ──────────────────────────────────
     stage('9. Health Checks') {
       steps {
         sh '''
           sleep 15
-          for APP in node python java go php; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://${SERVER_IP}/${APP}/ 2>/dev/null || echo "000")
-            echo "${APP}-app: HTTP ${STATUS}"
-          done
+          curl -s -o /dev/null -w "PHP: %{http_code}\n" http://54.196.219.15/ || true
+          curl -s -o /dev/null -w "Node: %{http_code}\n" http://54.196.219.15/node/ || true
+          curl -s -o /dev/null -w "Python: %{http_code}\n" http://54.196.219.15/python/ || true
+          curl -s -o /dev/null -w "Java: %{http_code}\n" http://54.196.219.15/java/ || true
+          curl -s -o /dev/null -w "Go: %{http_code}\n" http://54.196.219.15/go/ || true
         '''
       }
     }
@@ -195,66 +141,16 @@ SCRIPT
       script {
         echo """
 ==============================================
-  DEPLOYMENT COMPLETE
-  Server : ${SERVER_IP}
-  PHP    : http://${SERVER_IP}/
-  Node   : http://${SERVER_IP}/node/
-  Python : http://${SERVER_IP}/python/
-  Java   : http://${SERVER_IP}/java/
-  Go     : http://${SERVER_IP}/go/
-  Jenkins: http://${SERVER_IP}:8080
+  Server : 54.196.219.15
+  PHP    : http://54.196.219.15/
+  Node   : http://54.196.219.15/node/
+  Python : http://54.196.219.15/python/
+  Java   : http://54.196.219.15/java/
+  Go     : http://54.196.219.15/go/
 ==============================================
         """
       }
       sh 'docker image prune -f || true'
-      echo 'Pipeline failed. Check stage logs above.'
-    }
-  }
-}
-    // ── 8. Store Terraform on Server ──────────────────────
-    stage('8. Store Terraform on Server') {
-      steps {
-        sh '''
-          SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no"
-          ssh $SSH_OPTS ubuntu@${SERVER_IP} \
-            "sudo mkdir -p /opt/terraform/project && sudo chown ubuntu:ubuntu /opt/terraform/project"
-          rsync -az --delete -e "ssh $SSH_OPTS" \
-            ${WORKSPACE}/terraform/ ubuntu@${SERVER_IP}:/opt/terraform/project/
-          echo "Terraform files stored at /opt/terraform/project on the server"
-        '''
-      }
-    }
-    // ── 9. Health Checks ──────────────────────────────────
-    stage('9. Health Checks') {
-      steps {
-        sh '''
-          sleep 15
-          for APP in node python java go php; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://${SERVER_IP}/${APP}/ 2>/dev/null || echo "000")
-            echo "${APP}-app: HTTP ${STATUS}"
-          done
-        '''
-      }
-    }
-  }
-  post {
-    always {
-      script {
-        echo """
-==============================================
-  DEPLOYMENT COMPLETE
-  Server : ${SERVER_IP}
-  PHP    : http://${SERVER_IP}/
-  Node   : http://${SERVER_IP}/node/
-  Python : http://${SERVER_IP}/python/
-  Java   : http://${SERVER_IP}/java/
-  Go     : http://${SERVER_IP}/go/
-  Jenkins: http://${SERVER_IP}:8080
-==============================================
-        """
-      }
-      sh 'docker image prune -f || true'
-      echo 'Pipeline failed. Check stage logs above.'
     }
   }
 }
