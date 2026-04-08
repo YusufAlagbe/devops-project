@@ -154,15 +154,15 @@ pipeline {
             # Pull latest images from Docker Hub
             docker network create app-network 2>/dev/null || true
             for APP in node-app python-app java-app go-app php-app; do
-              docker pull ${DOCKER_HUB_USER}/\$APP:latest
+              docker pull yoalagbe1/\$APP:latest
             done
 
             # Start app containers
-            docker run -d --name node-app   --network app-network --restart unless-stopped ${DOCKER_HUB_USER}/node-app:latest
-            docker run -d --name python-app --network app-network --restart unless-stopped ${DOCKER_HUB_USER}/python-app:latest
-            docker run -d --name java-app   --network app-network --restart unless-stopped ${DOCKER_HUB_USER}/java-app:latest
-            docker run -d --name go-app     --network app-network --restart unless-stopped ${DOCKER_HUB_USER}/go-app:latest
-            docker run -d --name php-app    --network app-network --restart unless-stopped ${DOCKER_HUB_USER}/php-app:latest
+            docker run -d --name node-app   --network app-network --restart unless-stopped yoalagbe1/node-app:latest
+            docker run -d --name python-app --network app-network --restart unless-stopped yoalagbe1/python-app:latest
+            docker run -d --name java-app   --network app-network --restart unless-stopped yoalagbe1/java-app:latest
+            docker run -d --name go-app     --network app-network --restart unless-stopped yoalagbe1/go-app:latest
+            docker run -d --name php-app    --network app-network --restart unless-stopped yoalagbe1/php-app:latest
 
             # Start nginx proxy
             docker run -d --name nginx-proxy \
