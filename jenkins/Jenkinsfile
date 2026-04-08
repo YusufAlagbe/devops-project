@@ -137,115 +137,30 @@ pipeline {
     stage('7. Deploy Containers') {
       steps {
         sh '''
-          # Copy nginx config
+          # Write deploy script
+          cat > /tmp/deploy.sh << 'SCRIPT'
+set -e
+sudo mv /tmp/nginx-proxy.conf /opt/nginx-proxy.conf
+docker stop nginx-proxy node-app python-app java-app go-app php-app 2>/dev/null || true
+docker rm nginx-proxy node-app python-app java-app go-app php-app 2>/dev/null || true
+docker network create app-network 2>/dev/null || true
+docker pull yoalagbe1/node-app:latest
+docker pull yoalagbe1/python-app:latest
+docker pull yoalagbe1/java-app:latest
+docker pull yoalagbe1/go-app:latest
+docker pull yoalagbe1/php-app:latest
+docker run -d --name node-app --network app-network --restart unless-stopped yoalagbe1/node-app:latest
+docker run -d --name python-app --network app-network --restart unless-stopped yoalagbe1/python-app:latest
+docker run -d --name java-app --network app-network --restart unless-stopped yoalagbe1/java-app:latest
+docker run -d --name go-app --network app-network --restart unless-stopped yoalagbe1/go-app:latest
+docker run -d --name php-app --network app-network --restart unless-stopped yoalagbe1/php-app:latest
+docker run -d --name nginx-proxy --network app-network -p 80:80 -v /opt/nginx-proxy.conf:/etc/nginx/nginx.conf:ro --restart unless-stopped nginx:alpine
+docker ps --format "table {{.Names}}	{{.Status}}"
+SCRIPT
+          # Copy nginx config and run deploy script
           scp -i $SSH_KEY -o StrictHostKeyChecking=no \
             nginx/nginx-proxy.conf ubuntu@${SERVER_IP}:/tmp/nginx-proxy.conf
-
-          ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@${SERVER_IP} bash <<REMOTE
-            set -e
-            sudo mv /tmp/nginx-proxy.conf /opt/nginx-proxy.conf
-
-            # Stop old containers
-            docker stop nginx-proxy node-app python-app java-app go-app php-app 2>/dev/null || true
-            docker rm   nginx-proxy node-app python-app java-app go-app php-app 2>/dev/null || true
-
-            # Pull latest images from Docker Hub
-            docker network create app-network 2>/dev/null || true
-            for APP in node-app python-app java-app go-app php-app; do
-              docker pull yoalagbe1/\$APP:latest
-            done
-
-            # Start app containers
-            docker run -d --name node-app   --network app-network --restart unless-stopped yoalagbe1/node-app:latest
-            docker run -d --name python-app --network app-network --restart unless-stopped yoalagbe1/python-app:latest
-            docker run -d --name java-app   --network app-network --restart unless-stopped yoalagbe1/java-app:latest
-            docker run -d --name go-app     --network app-network --restart unless-stopped yoalagbe1/go-app:latest
-            docker run -d --name php-app    --network app-network --restart unless-stopped yoalagbe1/php-app:latest
-
-            # Start nginx proxy
-            docker run -d --name nginx-proxy \
-              --network app-network \
-              -p 80:80 \
-              -v /opt/nginx-proxy.conf:/etc/nginx/nginx.conf:ro \
-              --restart unless-stopped \
-              nginx:alpine
-
-            echo "All containers started:"
-            docker ps --format "table {{.Names}}\t{{.Status}}"
-REMOTE
+          ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@${SERVER_IP} bash < /tmp/deploy.sh
         '''
       }
     }
-
-    // ── 8. Store Terraform on Server ──────────────────────
-    stage('8. Store Terraform on Server') {
-      steps {
-        sh '''
-          SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no"
-          ssh $SSH_OPTS ubuntu@${SERVER_IP} \
-            "sudo mkdir -p /opt/terraform/project && sudo chown ubuntu:ubuntu /opt/terraform/project"
-          rsync -az --delete -e "ssh $SSH_OPTS" \
-            ${WORKSPACE}/terraform/ ubuntu@${SERVER_IP}:/opt/terraform/project/
-          echo "Terraform files stored at /opt/terraform/project on the server"
-        '''
-      }
-    }
-
-    // ── 9. Health Checks ──────────────────────────────────
-    stage('9. Health Checks') {
-      steps {
-        sh '''
-          check() {
-            local name=$1 url=$2
-            for i in $(seq 1 12); do
-              CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null || echo "000")
-              if echo "200 301 302" | grep -q "$CODE"; then
-                echo "  PASS  $name → $url (HTTP $CODE)"
-                return 0
-              fi
-              echo "  Wait  $name attempt $i/12 (HTTP $CODE)"
-              sleep 15
-            done
-            echo "  FAIL  $name → $url"
-            return 1
-          }
-
-          FAIL=0
-          check "PHP  (default)"  "http://${SERVER_IP}/"        || FAIL=1
-          check "Node.js"         "http://${SERVER_IP}/node/"   || FAIL=1
-          check "Python"          "http://${SERVER_IP}/python/" || FAIL=1
-          check "Java"            "http://${SERVER_IP}/java/"   || FAIL=1
-          check "Go"              "http://${SERVER_IP}/go/"     || FAIL=1
-          check "Jenkins"         "http://${SERVER_IP}:8080"    || FAIL=1
-
-          [ $FAIL -eq 0 ] && echo "All apps are LIVE!" || exit 1
-        '''
-      }
-    }
-
-  } // end stages
-
-  post {
-    always {
-      script {
-        if (env.SERVER_IP) {
-          echo """
-==============================================
-  DEPLOYMENT COMPLETE
-  Server : ${env.SERVER_IP}
-  PHP    : http://${env.SERVER_IP}/
-  Node   : http://${env.SERVER_IP}/node/
-  Python : http://${env.SERVER_IP}/python/
-  Java   : http://${env.SERVER_IP}/java/
-  Go     : http://${env.SERVER_IP}/go/
-  Jenkins: http://${env.SERVER_IP}:8080
-==============================================
-          """
-        }
-      }
-      sh 'docker image prune -f || true'
-    }
-    success { echo 'Pipeline succeeded!' }
-    failure { echo 'Pipeline failed. Check stage logs above.' }
-  }
-}
