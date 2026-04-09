@@ -116,6 +116,7 @@ SCRIPT
       }
     }
     stage('8. Store Terraform on Server') {
+      when { expression { false } }
       steps {
         sh '''
           ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@54.196.219.15 "sudo mkdir -p /opt/terraform/project && sudo chown ubuntu:ubuntu /opt/terraform/project"
